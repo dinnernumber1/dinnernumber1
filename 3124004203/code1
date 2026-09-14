@@ -36,7 +36,7 @@ public class Main {
      * 即：抄袭版中出现在原文中的 bigram 数量 / 抄袭版总 bigram 数量。
      * 返回值范围 [0.0, 1.0]。
      */
-    private static double calcSimilarity(String orig, String copy) {
+    public static double calcSimilarity(String orig, String copy) {
         orig = clean(orig);
         copy = clean(copy);
 
@@ -72,7 +72,7 @@ public class Main {
     /**
      * 清洗文本：只保留汉字、英文字母、数字，去除标点、空白等。
      */
-    private static String clean(String s) {
+    public static String clean(String s) {
         return s.replaceAll("[^\\u4e00-\\u9fa5a-zA-Z0-9]", "");
     }
 }
