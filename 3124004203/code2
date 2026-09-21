@@ -91,11 +91,22 @@ class ExpressionNode {
         return leftStr + " " + operator + " " + rightStr;
     }
 
+    // 修复 Bug 2：过滤叶子节点，避免产生 2 / (3) 这样的多余括号
     private boolean isLowerPriority(char childOp, char parentOp, boolean isLeft) {
-        if (childOp == ' ' || parentOp == ' ') return false;
-        if (parentOp == '*' || parentOp == '/') return childOp == '+' || childOp == '-';
-        if (parentOp == '-' && !isLeft) return childOp == '+' || childOp == '-';
-        if (parentOp == '/' && !isLeft) return true;
+        // 如果子节点不是运算符（是叶子节点），不需要加括号
+        if (childOp != '+' && childOp != '-' && childOp != '*' && childOp != '/') return false;
+        // 如果父节点不是运算符，不需要加括号
+        if (parentOp != '+' && parentOp != '-' && parentOp != '*' && parentOp != '/') return false;
+
+        if (parentOp == '*' || parentOp == '/') {
+            return childOp == '+' || childOp == '-';
+        }
+        if (parentOp == '-' && !isLeft) {
+            return childOp == '+' || childOp == '-';
+        }
+        if (parentOp == '/' && !isLeft) {
+            return true;
+        }
         return false;
     }
 
@@ -139,17 +150,15 @@ class Generator {
         }
     }
 
-    public ExpressionNode generateExpression(int maxOperators) {
-        while (true) {
-            try {
-                ExpressionNode root = generateNode(maxOperators);
-                String canonical = root.getCanonicalString();
-                if (!uniqueExpressions.contains(canonical)) {
-                    uniqueExpressions.add(canonical);
-                    return root;
-                }
-            } catch (ArithmeticException e) {}
+    // 修复 Bug 1：抛出异常，让外层捕获，避免死循环
+    public ExpressionNode generateExpression(int maxOperators) throws ArithmeticException {
+        ExpressionNode root = generateNode(maxOperators);
+        String canonical = root.getCanonicalString();
+        if (uniqueExpressions.contains(canonical)) {
+            throw new ArithmeticException("重复表达式");
         }
+        uniqueExpressions.add(canonical);
+        return root;
     }
 
     private ExpressionNode generateNode(int maxOperators) {
@@ -215,7 +224,10 @@ public class Myapp {
                 failCount = 0;
             } catch (Exception e) {
                 i--; failCount++;
-                if (failCount > 1000) { System.out.println("范围太小，无法生成足够不重复题目。已生成: " + (i) + " 题。"); break; }
+                if (failCount > 1000) {
+                    System.out.println("范围太小，无法生成足够不重复题目。已生成: " + (i - 1) + " 题。");
+                    break;
+                }
             }
         }
         writeFile("Exercises.txt", exercises);
@@ -252,12 +264,10 @@ public class Myapp {
 
     private static Fraction evaluateString(String exprStr) {
         try {
-            // 不再使用正则替换带分数，直接交给解析器处理
             return parseExpression(exprStr);
         } catch (Exception e) { return null; }
     }
 
-    // 修复后的解析器：原生支持带分数 2'3/8，彻底解决误判
     private static Fraction parseExpression(String expr) {
         final String cleanExpr = expr.replace(" ", "");
         return new Object() {
@@ -286,30 +296,27 @@ public class Myapp {
             }
             Fraction parseFactor() {
                 if (eat('(')) { Fraction x = parseExpression(); eat(')'); return x; }
+                // 修复 Bug 3：支持一元负号
+                if (eat('-')) return parseFactor().multiply(new Fraction(-1, 1));
+
                 int startPos = this.pos;
                 if (ch >= '0' && ch <= '9') {
-                    // 1. 解析整数部分
                     while (ch >= '0' && ch <= '9') nextChar();
-                    // 2. 如果是带分数 (例如 2'3/8)
                     if (ch == '\'') {
                         int intPart = Integer.parseInt(cleanExpr.substring(startPos, this.pos));
-                        nextChar(); // 跳过 '
+                        nextChar();
                         int fracStart = this.pos;
                         while (ch >= '0' && ch <= '9' || ch == '/') nextChar();
                         String[] parts = cleanExpr.substring(fracStart, this.pos).split("/");
                         Fraction fraction = new Fraction(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
                         return new Fraction(intPart, 1).add(fraction);
-                    }
-                    // 3. 如果是普通分数 (例如 3/8)
-                    else if (ch == '/') {
-                        nextChar(); // 跳过 /
+                    } else if (ch == '/') {
+                        nextChar();
                         while (ch >= '0' && ch <= '9') nextChar();
                         String numStr = cleanExpr.substring(startPos, this.pos);
                         String[] parts = numStr.split("/");
                         return new Fraction(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
-                    }
-                    // 4. 如果是纯整数
-                    else {
+                    } else {
                         return new Fraction(Integer.parseInt(cleanExpr.substring(startPos, this.pos)), 1);
                     }
                 }
